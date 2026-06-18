@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ CyberChat - Premium Edition</title>
+    <style>
+        :root {
+            --bg-channels: #202225; --bg-chat: #36393f; --bg-members: #2f3136;
+            --bg-input: #40444b; --text-normal: #dcddde; --blurple: #5865F2;
+            --green: #3ba55d; --text-muted: #72767d; --mention-bg: rgba(250, 166, 26, 0.1);
+            --mention-border: #faa61a;
+        }
+        body { font-family: 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg-chat); color: var(--text-normal); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Layout */
+        #channels-bar { width: 240px; background: var(--bg-channels); display: flex; flex-direction: column; padding: 15px; border-right: 1px solid #18191c; }
+        #main-chat { flex: 1; display: flex; flex-direction: column; background: var(--bg-chat); position: relative; }
+        #members-bar { width: 220px; background: var(--bg-members); display: flex; flex-direction: column; padding: 15px; border-left: 1px solid #202225; }
+        
+        /* Salons */
+        .channel-btn { padding: 12px; border-radius: 6px; cursor: pointer; margin-bottom: 6px; font-weight: 600; color: var(--text-muted); transition: all 0.2s; }
+        .channel-btn:hover, .channel-btn.active { background: #34373c; color: #fff; }
+        .channel-btn::before { content: "# "; color: #8e9297; }
+
+        /* Conteneurs de messages */
+        #chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .msg-container { display: flex; flex-direction: column; padding: 8px 16px; border-radius: 4px; width: calc(100% - 32px); }
+        .msg-container:hover { background: rgba(4, 4, 5, 0.07); }
+        .mentionne { background: var(--mention-bg) !important; border-left: 3px solid var(--mention-border); }
+        
+        .msg-header { display: flex; align-items: baseline; gap: 8px; }
+        .pseudo { color: #fff; font-weight: 600; font-size: 1em; cursor: pointer; }
+        .pseudo:hover { text-decoration: underline; }
+        .timestamp { color: var(--text-muted); font-size: 0.75em; }
+        .msg-body { margin-top: 4px; color: #dcddde; font-size: 0.95em; line-height: 1.4; word-break: break-word; }
+
+        /* Markdown rendu */
+        code { background: #2f3136; padding: 2px 6px; border-radius: 4px; font-family: Consolas, monospace; color: #e6c07b; }
+        pre { background: #2f3136; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 5px 0; border: 1px solid #202225; }
+        pre code { padding: 0; background: transparent; color: #abb2bf; }
+        
+        /* Fichiers uploadés */
+        .chat-img { max-width: 450px; max-height: 350px; border-radius: 6px; margin-top: 6px; border: 1px solid #202225; }
+        .file-link { display: inline-flex; align-items: center; background: #2f3136; padding: 12px; border-radius: 6px; color: #00aff4; text-decoration: none; margin-top: 6px; font-weight: bold; border: 1px solid #202225; }
+        
+        #typing-indicator { height: 18px; padding-left: 20px; color: var(--text-muted); font-size: 0.85em; }
+        #input-area { padding: 0 20px 20px 20px; display: flex; gap: 12px; }
+        input[type="text"] { flex: 1; background: var(--bg-input); border: none; padding: 16px; color: white; border-radius: 8px; outline: none; font-size: 1em; }
+        button { background: var(--blurple); color: white; border: none; padding: 16px 28px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #4752c4; }
+        .file-btn { background: #4f545c; }
+
+        #drop-overlay { display: none; position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(88, 101, 242, 0.6); border: 4px dashed #fff; z-index: 10; align-items: center; justify-content: center; color: white; font-size: 2em; font-weight: bold; pointer-events: none;}
+        .member-tag { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-weight: 500; }
+        .status-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; }
+    </style>
+</head>
+<body>
+
+    <div id="channels-bar">
+        <h2 style="color: white; margin: 0 0 15px 0; font-size: 1.2em;">⚡ CyberChat</h2>
+        <div id="général" class="channel-btn active" onclick="changerDeSalon('général')">général</div>
+        <div id="code-dev" class="channel-btn" onclick="changerDeSalon('code-dev')">code-dev</div>
+        <div id="partage" class="channel-btn" onclick="changerDeSalon('partage')">partage-fichiers</div>
+    </div>
+
+    <div id="main-chat">
+        <div id="drop-overlay">LÂCHE LE FICHIER ICI 🚀</div>
+        <h4 id="salon-titre" style="padding: 16px 20px; margin: 0; background: rgba(0,0,0,0.15); font-size: 1.1em;"># général</h4>
+        <div id="chat-box"></div>
+        <div id="typing-indicator"></div>
+
+        <div id="input-area">
+            <button class="file-btn" onclick="document.getElementById('file-picker').click()">📎</button>
+            <input type="file" id="file-picker" style="display:none" onchange="traiterFichier(this.files[0])">
+            <input type="text" id="msgInput" placeholder="Message..." oninput="notifierEcriture()">
+            <button onclick="envoyerTexte()">Envoyer</button>
+        </div>
+    </div>
+
+    <div id="members-bar">
+        <h3 style="color: white; margin-top: 0; font-size: 0.9em; text-transform: uppercase; color: var(--text-muted);">En ligne</h3>
+        <div id="liste-membres"></div>
+    </div>
+
+    <audio id="notif-sound" src="https://assets.mixkit.co/active_storage/sfx/2357/2357-84.wav" preload="auto"></audio>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let monPseudo = localStorage.getItem('chat_pseudo') || prompt("Ton pseudo :") || "CyberUser";
+        localStorage.setItem('chat_pseudo', monPseudo);
+        
+        let salonActuel = 'général';
+        let tempsFinEcriture;
+
+        const chatBox = document.getElementById('chat-box');
+        const msgInput = document.getElementById('msgInput');
+        const listeMembres = document.getElementById('liste-membres');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const notifSound = document.getElementById('notif-sound');
+        const dropOverlay = document.getElementById('drop-overlay');
+
+        socket.emit('nouveau membre', monPseudo);
+
+        socket.on('liste membres', (membres) => {
+            listeMembres.innerHTML = membres.map(m => `<div class="member-tag"><div class="status-dot"></div><span onclick="insererMention('${m.pseudo}')" style="cursor:pointer">${m.pseudo}</span></div>`).join('');
+        });
+
+        function changerDeSalon(nouveauSalon) {
+            if(salonActuel === nouveauSalon) return;
+            document.getElementById(salonActuel).classList.remove('active');
+            document.getElementById(nouveauSalon).classList.add('active');
+            salonActuel = nouveauSalon;
+            document.getElementById('salon-titre').innerText = `# ${nouveauSalon}`;
+            
+            chatBox.innerHTML = '';
+            socket.emit('changer salon', nouveauSalon);
+        }
+
+        socket.on('historique complet', (messages) => {
+            chatBox.innerHTML = '';
+            messages.forEach(msg => afficherMessage(msg));
+        });
+
+        function formaterMarkdown(texte) {
+            let clean = texte.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            clean = clean.replace(/```([\s\S]+?)```/g, '<pre><code>$1</code></pre>');
+            clean = clean.replace(/`([^`]+)`/g, '<code>$1</code>');
+            clean = clean.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            clean = clean.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            return clean;
+        }
+
+        function envoyerTexte() {
+            const texte = msgInput.value.trim();
+            if(!texte) return;
+            socket.emit('chat message', { pseudo: monPseudo, contenu: texte, type: 'texte', salon: salonActuel });
+            msgInput.value = '';
+            socket.emit('en train d\'ecrire', { pseudo: monPseudo, statut: false, salon: salonActuel });
+        }
+
+        window.addEventListener('dragover', (e) => { e.preventDefault(); dropOverlay.style.display = "flex"; });
+        window.addEventListener('dragleave', (e) => { if(e.y <= 0 || e.x <= 0) dropOverlay.style.display = "none"; });
+        window.addEventListener('drop', (e) => {
+            e.preventDefault(); dropOverlay.style.display = "none";
+            if(e.dataTransfer.files.length > 0) traiterFichier(e.dataTransfer.files[0]);
+        });
+
+        function traiterFichier(fichier) {
+            if (!fichier) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const typeFormat = fichier.type.startsWith('image/') ? 'image' : 'fichier';
+                socket.emit('chat message', {
+                    pseudo: monPseudo, contenu: e.target.result, nomFichier: fichier.name, type: typeFormat, salon: salonActuel
+                });
+            };
+            reader.readAsDataURL(fichier);
+        }
+
+        function notifierEcriture() {
+            socket.emit('en train d\'ecrire', { pseudo: monPseudo, statut: true, salon: salonActuel });
+            clearTimeout(tempsFinEcriture);
+            tempsFinEcriture = setTimeout(() => {
+                socket.emit('en train d\'ecrire', { pseudo: monPseudo, statut: false, salon: salonActuel });
+            }, 1200);
+        }
+
+        socket.on('affichage ecriture', (data) => {
+            typingIndicator.innerText = data.statut ? `${data.pseudo} est en train d'écrire...` : '';
+        });
+
+        socket.on('chat message', (data) => {
+            if(data.salon === salonActuel) {
+                afficherMessage(data);
+                if (data.pseudo !== monPseudo) notifSound.play().catch(() => {});
+            }
+        });
+
+        function afficherMessage(data) {
+            const div = document.createElement('div');
+            div.classList.add('msg-container');
+            if(data.contenu && data.contenu.includes(`@${monPseudo}`)) div.classList.add('mentionne');
+
+            let corps = '';
+            if(data.type === 'texte') corps = `<div class="msg-body">${formaterMarkdown(data.contenu)}</div>`;
+            else if(data.type === 'image') corps = `<img src="${data.contenu}" class="chat-img" onclick="window.open(this.src)"/>`;
+            else if(data.type === 'fichier') corps = `<a href="${data.contenu}" download="${data.nomFichier}" class="file-link">📁 Fichier : ${data.nomFichier}</a>`;
+            
+            div.innerHTML = `
+                <div class="msg-header">
+                    <span class="pseudo" onclick="insererMention('${data.pseudo}')">${data.pseudo}</span>
+                    <span class="timestamp">${data.heure}</span>
+                </div>
+                ${corps}
+            `;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function insererMention(pseudo) { msgInput.value += ` @${pseudo} `; msgInput.focus(); }
+        msgInput.addEventListener("keypress", (e) => { if(e.key === "Enter") envoyerTexte(); });
+    </script>
+</body>
+</html>
